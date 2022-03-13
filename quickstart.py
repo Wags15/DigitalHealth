@@ -57,10 +57,11 @@ def eventsFromWeb():
 
     for line in lines.split("|"):
         info = line.split(",")
-        if(len(info) == 3 and info[0] != "None"):
+        if(len(info) == 4 and info[0] != "None"):
             name = info[0].strip()
             length = int(info[1].strip())
             difficulty = int(info[2].strip())
+            description = info[3]
             clone = False
             if(length >= 90):
                 length = length/2
@@ -68,8 +69,8 @@ def eventsFromWeb():
             length = int(math.ceil(length/15) * 15)
 
             if(clone == True):
-                events.append(Event(name,length,difficulty))
-            events.append(Event(name,length,difficulty))
+                events.append(Event(name,length,difficulty,description))
+            events.append(Event(name,length,difficulty,description))
     eventQueue(events)
 
 
@@ -107,8 +108,8 @@ def eventQueue(events):
     new_order = []
     events.sort(key=lambda x: x.difficulty, reverse=True)
 
-    s_break = Event("Break", 15, 0, "1")
-    m_break = Event("Break", 30, 0, "1")
+    s_break = Event("Break", 15, 0,"Take a break! You deserve it!", 4)
+    m_break = Event("Break", 30, 0, "Take a break! You deserve it!",4)
 
     while len(events) > 0:
         new_order.append(events[0])
@@ -287,7 +288,8 @@ def addEvent(event):
         service = build('calendar', 'v3', credentials=creds)
         new_event = {
             'summary': ""+str(event.name)+"",
-            'description': 'A chance to hear more about Google\'s developer products.',
+            'colorId': event.color,
+            'description': ""+str(event.description)+"",
             'start': {
                 'dateTime': ""+str(event.start.isoformat())+"",
                 'timeZone': 'GMT-4:00',
@@ -305,11 +307,13 @@ def addEvent(event):
                     }
                 ]
             },   
-            "colorID": int(event.color),                  
+                          
         }
 
         new_event = service.events().insert(calendarId='primary', body=new_event).execute()
         print ('Event created: %s' % (new_event.get('htmlLink')))
+
+   
      
 
     except HttpError as error:
@@ -327,14 +331,15 @@ def addEvent(event):
 
 class Event():
 
-    def __init__(self, name, length, difficulty, color="4"):
+    def __init__(self, name, length, difficulty,description, color=7):
         self.name = name
         self.length = length
         self.start = datetime.datetime.utcnow()
+        self.description = description
         self.end = self.start
         self.difficulty = difficulty
         self.next = None
-        self.color = color
+        self.color = int(color)
         # if(self.length > 90):
         #     new_length = round((self.length / 30)) * 15
         #     self.length = self.length - new_length
