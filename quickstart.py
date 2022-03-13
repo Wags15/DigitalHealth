@@ -3,7 +3,6 @@ from __future__ import print_function
 import datetime
 import os.path
 import math
-import asyncio
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -17,26 +16,64 @@ SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.co
 
 avail_hrs = 0
 global start
+global end
+
 start = datetime.datetime.utcnow()
 rounded_min = int((math.ceil(start.minute/15)*15))
 if(rounded_min > 45):  # Doesnt take into account overflow into the next day
     start = start.replace(hour=start.hour+1, minute=rounded_min%60, second=0, microsecond=0)
 else:
     start = start.replace(minute=rounded_min, second=0, microsecond=0)
-global end
+start = start.replace(hour=start.hour-4)
+end = start
 
 
-async def main():
+def main():
     """Shows basic usage of the Google Calendar API.
     Prints the start and name of the next 10 events on the user's calendar.
     """
-    workingHours()
-    await createEvents()
+    # workingHours()
+    hoursFromWeb()
+    eventsFromWeb()
+    # createEvents()
+
+def hoursFromWeb():
+    global end
+    with open("end.txt", "r") as file:
+        lines = file.readline()
+
+    for line in lines.split("|"):
+        info = line.split(",")
+
+        if(len(info) == 2 and info[0] != "None"):
+            end= datetime.datetime.utcnow().replace(hour=int(info[0]), minute=int(info[1]), second=0, microsecond=0)
+            print(end)
 
 
+def eventsFromWeb():
+    events = []
+    with open("eventList.txt", "r") as file:
+        lines = file.readline()
+
+    for line in lines.split("|"):
+        info = line.split(",")
+        if(len(info) == 3 and info[0] != "None"):
+            name = info[0].strip()
+            length = int(info[1].strip())
+            difficulty = int(info[2].strip())
+            clone = False
+            if(length >= 90):
+                length = length/2
+                clone = True
+            length = int(math.ceil(length/15) * 15)
+
+            if(clone == True):
+                events.append(Event(name,length,difficulty))
+            events.append(Event(name,length,difficulty))
+    eventQueue(events)
 
 
-async def createEvents():
+def createEvents():
     flag = True
     print("Enter Info When Prompted. Enter 'exit' As A Name To Exit.")
     tot_hrs = 0
@@ -56,22 +93,22 @@ async def createEvents():
         #     print("Not Enough Time In The Day!")
         #     break
         # tot_hrs += length
-        difficulty = int(input("How Hard Is This Task (1-easy 2-medium 3-hard): "))
+        difficulty = int(input("How Hard Is This Task (1-10): "))
         if(clone == True):
             events.append(Event(name,length,difficulty))
         events.append(Event(name,length,difficulty))
-    await eventQueue(events)
+    eventQueue(events)
    #  await fillCal(events)
 
     
-async def eventQueue(events):
+def eventQueue(events):
     """Flips between hardest then easiest then second hardest, second easiest, etc.
     """
     new_order = []
     events.sort(key=lambda x: x.difficulty, reverse=True)
 
-    s_break = Event("Break", 15, 0)
-    m_break = Event("Break", 30, 0)
+    s_break = Event("Break", 15, 0, "1")
+    m_break = Event("Break", 30, 0, "1")
 
     while len(events) > 0:
         new_order.append(events[0])
@@ -87,7 +124,7 @@ async def eventQueue(events):
             else:
                 new_order.append(s_break)
             del events[-1]
-    await fillCal(new_order)
+    fillCal(new_order)
 
 def workingHours():
     flag = True
@@ -122,7 +159,7 @@ def myRound(x):
     return x
 
 
-async def getPrevEvents():
+def getPrevEvents():
     calendar = [False] * 96
     # global end
     # global start
@@ -164,9 +201,7 @@ async def getPrevEvents():
     global start
     global end
     start_in_min = ((start.hour * 60) + start.minute)/15
-    print(start_in_min)
     end_in_min = ((end.hour * 60) + end.minute)/15
-    print(end_in_min)
 
 
     i=0
@@ -187,9 +222,9 @@ async def getPrevEvents():
     return calendar
 
 
-async def fillCal(events):
+def fillCal(events):
     calendar = [False] * 96
-    calendar = await getPrevEvents()
+    calendar = getPrevEvents()
     # for event in events:
     #     start_index = event['start'].get('dateTime')
     #     start_index = datetime
@@ -217,7 +252,7 @@ async def fillCal(events):
                     event.end = event.end.replace(hour=end_hour, minute=end_min, second=0,microsecond=0)
     
                     
-                    await addEvent(event)
+                    addEvent(event)
                     
                     break
     f = open("./cal.txt", "w")
@@ -228,7 +263,7 @@ async def fillCal(events):
             cal.write(str(x)+'\n')
 
     
-async def addEvent(event):
+def addEvent(event):
     date = datetime.datetime.now()
     creds = None
     # The file token.json stores the user's access and refresh tokens, and is
@@ -269,7 +304,8 @@ async def addEvent(event):
                         "minutes": 1
                     }
                 ]
-            },                     
+            },   
+            "colorID": int(event.color),                  
         }
 
         new_event = service.events().insert(calendarId='primary', body=new_event).execute()
@@ -291,13 +327,14 @@ async def addEvent(event):
 
 class Event():
 
-    def __init__(self, name, length, difficulty):
+    def __init__(self, name, length, difficulty, color="4"):
         self.name = name
         self.length = length
         self.start = datetime.datetime.utcnow()
         self.end = self.start
         self.difficulty = difficulty
         self.next = None
+        self.color = color
         # if(self.length > 90):
         #     new_length = round((self.length / 30)) * 15
         #     self.length = self.length - new_length
@@ -305,4 +342,4 @@ class Event():
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
